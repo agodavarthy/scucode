@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="/home/archana/lucene-4.3.0/core/lucene-core-4.3.0.jar"/>
+	<classpathentry kind="lib" path="/home/archana/lucene-4.3.0/queryparser/lucene-queryparser-4.3.0.jar"/>
+	<classpathentry kind="lib" path="/home/archana/lucene-4.3.0/analysis/common/lucene-analyzers-common-4.3.0.jar"/>
+	<classpathentry kind="lib" path="/home/archana/lucene-4.3.0/demo/lucene-demo-4.3.0.jar"/>
+	<classpathentry kind="lib" path="/home/archana/json-simple-1.1.1.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/charsets.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/compilefontconfig.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/javazic.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/jce.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/jsse.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/management-agent.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/resources.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/rhino.jar"/>
+	<classpathentry kind="lib" path="/usr/lib/jvm/java-1.7.0-openjdk-amd64/jre/lib/rt.jar"/>
+	<classpathentry kind="lib" path="/home/archana/SCU_projects/research_changes/math_lib/commons-math3-3.2.jar"/>
+	<classpathentry kind="lib" path="/home/archana/SCU_projects/research_changes/math_lib/commons-math3-3.2-javadoc.jar"/>
+	<classpathentry kind="lib" path="/home/archana/SCU_projects/research_changes/math_lib/commons-math3-3.2-sources.jar"/>
+	<classpathentry kind="lib" path="/home/archana/SCU_projects/research_changes/math_lib/commons-math3-3.2-tests.jar"/>
+	<classpathentry kind="lib" path="/home/archana/SCU_projects/research_changes/math_lib/commons-math3-3.2-test-sources.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

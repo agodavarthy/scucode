@@ -1,0 +1,1 @@
+INDEX VERSION 1.126+/home/archana/lucene_workspace/LuceneResearchChanges/.metadata/.plugins/org.eclipse.jdt.core

@@ -1,0 +1,884 @@
+package OldCode;
+//Working Clean-Up
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealVector;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.compound.hyphenation.TernaryTree.Iterator;
+import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Version;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+
+public class DynResInt_unclean {
+	private Map<String, TestTermParams> testCorpusMap;
+	private Map<String, TestTermParams> testCorpusMapBaseline1;
+	private Map<String, TestTermParams> testCorpusMapBaseline2;
+	private Map<String, TestTermParams> testCorpusMapBaseline3;
+	private Map<String, Integer> areaCorpusMap;
+	private Analyzer analyzer;
+	private double alpha;
+	private String yearT;
+	private String yearTPlus;
+	private BufferedReader resYearCorpusBuffRead;
+	private BufferedReader resYearAreaCorpusBuffRead;
+	private File testPath;
+	private File areaTPath;
+	private File areaTPlusPath;
+	private File researcherPath;
+	private JSONParser jsonParser;
+	private HashMap researcherYearAreaCorpusMap;
+	private HashMap resYearAreasCnt;
+	private HashMap yearAreasCnt;
+	private String researcherId;
+	private String researcherName;
+	private HashMap yearCorpusMap;
+	private String researcherCorpus;
+	private Directory directory;
+	private IndexWriterConfig config;
+	private IndexWriter iwriter;
+	
+    public static final FieldType TYPE_STORED = new FieldType();
+    private static Set<String> terms = new HashSet<>();
+    static {
+        TYPE_STORED.setIndexed(true);
+        TYPE_STORED.setStored(true);
+        TYPE_STORED.setStoreTermVectors(true);
+        TYPE_STORED.tokenized();
+        TYPE_STORED.storeTermVectorPayloads();
+        TYPE_STORED.storeTermVectors();
+    }
+    
+	private BufferedReader openResearcherYearCorpus() {
+		BufferedReader br = null;
+		try {
+//			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_corpus.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_corpus_arnet_IR.json"));
+			return br;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return br;
+		}
+	}
+
+	private BufferedReader openResearcherYearAreaCorpus() {
+		BufferedReader br = null;
+		try {
+//			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_areas.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_areas_arnet_IR.json"));
+			return br;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return br;
+		}
+	}
+	
+	private BufferedReader openTestCorpus() {
+		BufferedReader br = null;
+		try {
+//			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/test_year_corpus.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/test_year_corpus_arnet_IR.json"));
+			return br;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return br;
+		}
+	}	
+	
+    private Map<String, Integer> getTermFrequencies(IndexReader reader, int docId, String content)
+            throws IOException {
+        Terms vector = reader.getTermVector(docId, content);
+        TermsEnum termsEnum = null;
+        termsEnum = vector.iterator(termsEnum);
+        Map<String, Integer> frequencies = new HashMap<>();
+        BytesRef text = null;
+        while ((text = termsEnum.next()) != null) {
+            String term = text.utf8ToString();
+            int freq = (int) termsEnum.totalTermFreq();
+            frequencies.put(term, freq);
+            terms.add(term);
+        }
+        return frequencies;
+    }
+    private RealVector toRealVector(Map<String, Integer> map) {
+        RealVector vector = new ArrayRealVector(terms.size());
+        int i = 0;
+        for (String term : terms) {
+            int value = map.containsKey(term) ? map.get(term) : 0;
+            vector.setEntry(i++, value);
+        }
+        return (RealVector) vector.mapDivide(vector.getL1Norm());
+    }
+    private double getCosineSimilarity(RealVector v1, RealVector v2) {
+    	double result = 0.0;
+    	try{
+    		result = (v1.dotProduct(v2)) / (v1.getNorm() * v2.getNorm());
+    	}catch(Exception e){
+    		e.printStackTrace();
+    	}
+        return result;
+    }
+    private double cosineDocumentSimilarity(int d1, int d2, IndexReader reader, String content) throws IOException {
+        Map<String, Integer> f1 = getTermFrequencies(reader, d1, content);
+        Map<String, Integer> f2 = getTermFrequencies(reader, d2, content);
+        RealVector v1;
+        RealVector v2;
+        v1 = toRealVector(f1);
+        v2 = toRealVector(f2);
+//        System.out.println("Comparing docs:"+d1+"&"+d2);
+//        System.out.println("v1:"+v1);
+//        System.out.println("v2:"+v2);
+        return getCosineSimilarity(v1, v2);
+    }
+  
+    private double cosineDocumentSimilarity(int d1, int d2, IndexReader reader1, IndexReader reader2, String content1, String content2) throws IOException {
+    	Map<String, Integer> f1 = getTermFrequencies(reader1, d1, content1);
+    	Map<String, Integer> f2 = getTermFrequencies(reader2, d2, content2);
+        RealVector v1;
+        RealVector v2;
+        v1 = toRealVector(f1);
+        v2 = toRealVector(f2);
+        return getCosineSimilarity(v1, v2);
+    }
+
+	private class TestTermParams {
+		int freq;
+		double prob;
+
+		public TestTermParams(int freq, double prob) {
+			this.freq = freq;
+			this.prob = prob;
+		}
+	}	
+
+	private Map<String, Integer> getAreaTerms(IndexReader ireader, int docID) throws IOException {
+		areaCorpusMap = new HashMap<String, Integer>();
+		Terms area_terms = ireader.getTermVector(docID, "areaCorpus");
+		TermsEnum termsEnum = null;
+		termsEnum = area_terms.iterator(termsEnum);
+		BytesRef name = null;
+		while ((name = termsEnum.next()) != null) {
+			String term = name.utf8ToString();
+			int freq = (int) termsEnum.totalTermFreq();
+			areaCorpusMap.put(term, freq);
+		}
+		return areaCorpusMap;
+	}
+	private void extractFields(String resYearCorpus, String resYearWiseAreaCorpus) throws ParseException{
+		Object resYearObj = jsonParser.parse(resYearCorpus);
+		JSONObject resYearJSONObj = (JSONObject)resYearObj;
+//		System.out.println(resYearWiseAreaCorpus);
+		Object resYearAreaObj = jsonParser.parse(resYearWiseAreaCorpus);
+		JSONObject resYearAreaJSONObj = (JSONObject)resYearAreaObj;
+		researcherYearAreaCorpusMap = (HashMap)resYearAreaJSONObj.get("year_area_corpus");
+//		System.out.println("ExtractFields:"+(HashMap)resYearAreaJSONObj.get("year_area_corpus"));
+//		researcherYearAreaCorpusMap = (HashMap)resYearAreaJSONObj.get("year_corpus");
+		researcherId = (String)resYearJSONObj.get("_id");
+		researcherName = (String)resYearJSONObj.get("name");
+		String resID = (String)resYearAreaJSONObj.get("_id");
+		String resName = (String)resYearAreaJSONObj.get("name");
+//		System.out.println(researcherId+":"+resID);
+//		System.out.println(researcherName+":"+resName);
+		if (resYearJSONObj.get("year_corpus") != null){
+//			System.out.println("OK");
+			yearCorpusMap = (HashMap)resYearJSONObj.get("year_corpus");
+//			System.out.println(yearCorpusMap);
+		}
+	}
+	private void indexTestCorpusYears(String yearTPlus) throws IOException, ParseException, InterruptedException{
+		JSONParser jsonParser = new JSONParser();
+		BufferedReader testCorpusBuffRead = openTestCorpus();
+		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+    	Directory directory = FSDirectory.open(path);
+        IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+        IndexWriter iwriter;
+    	String testCorpus;
+		iwriter = new IndexWriter(directory, config);
+		while ((testCorpus = testCorpusBuffRead.readLine()) != null){
+			Object testCorpusObj = jsonParser.parse(testCorpus);
+			JSONObject testCorpusJSONObj = (JSONObject)testCorpusObj;
+			Document doc = new Document();
+			HashMap yearCorpusMap = (HashMap)testCorpusJSONObj.get("test_corpus");
+//			String yearCorpus = (String)testCorpusJSONObj.get("test_corpus");
+			String yearCorpus = (String)yearCorpusMap.get(yearTPlus);
+//			System.out.println(yearCorpus);
+			doc.add(new Field("id", yearTPlus, Field.Store.YES, Field.Index.NOT_ANALYZED));
+			Field field = new Field("yearCorpus", yearCorpus, TYPE_STORED);
+			doc.add(field);
+			iwriter.addDocument(doc);
+		}
+		iwriter.close();
+	}
+	
+	private void indexResearcherCorpus(String researcherId, String researcherCorpus) throws IOException{
+		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsResearcherCorpusIndex");
+    	Directory directory = FSDirectory.open(path);
+        IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+        IndexWriter iwriter;
+		iwriter = new IndexWriter(directory, config);
+		Document doc = new Document();
+		doc.add(new Field("researcherId", researcherId, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		Field field = new Field("researcherCorpus", researcherCorpus, TYPE_STORED);
+		doc.add(field);
+		iwriter.addDocument(doc);
+		iwriter.close();		
+	}
+
+	private void indexAreaTCorpus(String researcherId, String researcherName, String yearT, String areaStrT, String areaCorpusT) throws IOException{
+		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTAreaIndex");
+    	directory = FSDirectory.open(path);
+    	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+        
+		iwriter = new IndexWriter(directory, config);
+		Document docT = new Document();
+		docT.add(new Field("researcherId", researcherId, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("researcherName", researcherName, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("year", yearT, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("areaName", areaStrT, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		Field fieldT = new Field("areaCorpus", areaCorpusT, TYPE_STORED);
+		docT.add(fieldT);
+		iwriter.addDocument(docT);
+//		System.out.println("Indexed doc = " + areaStrT);
+		iwriter.close();
+	}
+
+	
+	private void indexAreaTPlusCorpus(String researcherId, String researcherName, String yearTPlus, String areaStrTPlus, String areaCorpusTPlus) throws IOException{
+		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTPlusAreaIndex");
+    	directory = FSDirectory.open(path);
+    	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+        
+		iwriter = new IndexWriter(directory, config);
+		Document docT = new Document();
+		docT.add(new Field("researcherId", researcherId, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("researcherName", researcherName, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("year", yearT, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		docT.add(new Field("areaName", areaStrTPlus, Field.Store.YES, Field.Index.NOT_ANALYZED));
+		Field fieldT = new Field("areaCorpus", areaCorpusTPlus, TYPE_STORED);
+		docT.add(fieldT);
+		iwriter.addDocument(docT);
+//		System.out.println("Indexed doc = " + areaStrT);
+		iwriter.close();
+	}
+
+	private void deleteIndexes(String field) throws IOException{
+		//Deleting Area Indices
+		File path = null;
+		if (field.equals("areasT"))
+			path = areaTPath;
+		else if(field.equals("areasTPlus"))
+			path = areaTPlusPath;
+		else if(field.equals("test"))
+			path = testPath;
+		else if(field.equals("researcher"))
+			path = researcherPath;
+
+		directory = FSDirectory.open(path);
+        config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+		iwriter = new IndexWriter(directory, config);
+		iwriter.deleteAll();
+		iwriter.commit();
+		iwriter.close();
+	}
+
+//	private void deleteDoc(int docID) throws IOException{
+//		//Deleting Area Indices
+//		
+//		directory = FSDirectory.open(areaPath);
+//        config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
+//    	Directory directory = FSDirectory.open(areaPath);
+//    	DirectoryReader ireader = DirectoryReader.open(directory);
+//		iwriter = new IndexWriter(directory, config);
+//		iwriter.tryDeleteDocument(ireader, docID);
+//		iwriter.commit();
+//		iwriter.close();
+//	}
+
+	private void getYearAreasCntDic() throws IOException, ParseException{
+		yearAreasCnt = new HashMap();
+		BufferedReader br = null;
+		try {
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/year_areas_cnt_arnet_IR.json"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (br != null){
+			String year_area_cnt;
+			while ((year_area_cnt = br.readLine()) != null){
+				Object yearAreaCntObj = jsonParser.parse(year_area_cnt);
+				JSONObject yearAreaCntJSONObj = (JSONObject)yearAreaCntObj;
+				String year  = (String)yearAreaCntJSONObj.get("_id");
+				HashMap yearCorpusMap = (HashMap)yearAreaCntJSONObj.get("year_areas_cnt");
+				if (yearCorpusMap != null){
+					yearAreasCnt.put(year, yearCorpusMap);
+				}
+			}
+//			System.out.println(yearAreasCnt.size());
+		}
+		
+	}
+
+	private void getResYearAreasCntDic() throws IOException, ParseException{
+		resYearAreasCnt = new HashMap();
+		BufferedReader br = null;
+		try {
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_areas_cnt_arnet_IR.json"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (br != null){
+			String res_year_area_cnt;
+			while ((res_year_area_cnt = br.readLine()) != null){
+				Object resYearAreaCntObj = jsonParser.parse(res_year_area_cnt);
+				JSONObject resYearAreaCntJSONObj = (JSONObject)resYearAreaCntObj;
+				String researcherID  = (String)resYearAreaCntJSONObj.get("_id");
+				String researcherName  = (String)resYearAreaCntJSONObj.get("name");
+				HashMap resYearMap = (HashMap)resYearAreaCntJSONObj.get("year_areas_cnt");
+				if (resYearMap != null){
+					resYearAreasCnt.put(researcherID, resYearMap);
+				}
+				
+			}
+//			for (Object item : resYearAreasCnt.keySet()){
+////				System.out.println(item.toString() + resYearAreasCnt.get(item));
+//				String year = "2008";
+//				HashMap hm = (HashMap)resYearAreasCnt.get(item);
+//				if (hm.containsKey(year)){
+//					System.out.println(hm.get(year));
+//				}
+//			}
+		}
+		
+	}
+	
+	public DirectoryReader getReaderHandler(File path) throws IOException{
+    	Directory directory = FSDirectory.open(path);
+    	DirectoryReader ireader = DirectoryReader.open(directory);
+    	return ireader;
+	}
+	
+    public void readIndex(File path, String id, String field) throws IOException{
+    	Directory directory = FSDirectory.open(path);
+    	DirectoryReader ireader = DirectoryReader.open(directory);
+    	System.out.println("The number of documents is " + ireader.maxDoc());
+    	for (int i = 0; i < ireader.maxDoc(); i++){
+    		Set<String> terms = new HashSet<>();
+    		Document hitDoc = ireader.document(i);
+//    		System.out.print("terms for doc# " + hitDoc.get(id));
+    		Terms vector = ireader.getTermVector(i, field);	
+    	    if (vector != null){
+//    			System.out.println(" = " + vector.size());
+    			TermsEnum termsEnum = null;
+  				termsEnum = vector.iterator(termsEnum);
+   				BytesRef name = null;
+   				while ((name = termsEnum.next()) != null) {
+   					String term = name.utf8ToString();
+   					int freq = (int) termsEnum.totalTermFreq();
+   					terms.add(term);
+   					System.out.print(term + ":" + freq + " ");
+   				}
+   	       } else {
+   	    	   System.out.println("vector is null");
+   	       }
+    	       System.out.println("*****************************");
+    	   }
+    }
+
+	private void getTestCorpusTerms(String year) throws IOException {
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+    	Directory directory = FSDirectory.open(path);
+    	DirectoryReader ireader = DirectoryReader.open(directory);
+    	IndexSearcher isearcher = new IndexSearcher(ireader);
+		Term t = new Term("id", year);
+		Query query = new TermQuery(t);
+		double prob = 0.0;
+		TopDocs topdocs = isearcher.search(query, 10);
+		ScoreDoc[] scoreDocs = topdocs.scoreDocs;
+
+		int doc_no = scoreDocs[0].doc;
+
+		Terms year_terms = ireader.getTermVector(doc_no, "yearCorpus");
+		TermsEnum termsEnum = null;
+		termsEnum = year_terms.iterator(termsEnum);
+		BytesRef name = null;
+		testCorpusMap = new HashMap<String, TestTermParams>();
+		testCorpusMapBaseline1 = new HashMap<String, TestTermParams>();
+		testCorpusMapBaseline2 = new HashMap<String, TestTermParams>();
+		testCorpusMapBaseline3 = new HashMap<String, TestTermParams>();
+		while ((name = termsEnum.next()) != null) {
+			String term = name.utf8ToString();
+			int freq = (int) termsEnum.totalTermFreq();
+			TestTermParams ttp1 = new TestTermParams(freq, prob);
+			TestTermParams ttp2 = new TestTermParams(freq, prob);
+			TestTermParams ttp3 = new TestTermParams(freq, prob);
+			TestTermParams ttp4 = new TestTermParams(freq, prob);
+			testCorpusMap.put(term, ttp1);
+			testCorpusMapBaseline1.put(term, ttp2);
+			testCorpusMapBaseline2.put(term, ttp3);
+			testCorpusMapBaseline3.put(term, ttp4);
+		}
+	}
+
+    private double computePerplexity(Map<String, TestTermParams> testCorpusMap){
+    	double perplexity = 0.0;
+    	double logSumProb = 0.0;
+    	double l_perplexity = 0.0;
+    	int totFreq = calculateTotTestCorpusTerms(testCorpusMap);
+		for (Object term : testCorpusMap.keySet()) {
+			TestTermParams ttp = testCorpusMap.get(term);
+			logSumProb += Math.log(ttp.prob);
+		}
+		l_perplexity = logSumProb / totFreq;
+		perplexity = Math.pow(2, -l_perplexity);
+    	return perplexity;
+    }
+    
+    private double computeBaseline2Perplexity(Map<String, TestTermParams> testCorpusMap){
+    	double perplexity = 0.0;
+    	double logSumProb = 0.0;
+    	double l_perplexity = 0.0;
+    	int totFreq = calculateTotTestCorpusTerms(testCorpusMap);
+		for (Object term : testCorpusMap.keySet()) {
+			TestTermParams ttp = testCorpusMap.get(term);
+			logSumProb += Math.log(ttp.prob);
+		}
+		l_perplexity = logSumProb / totFreq;
+		perplexity = Math.pow(2, -l_perplexity);
+    	return perplexity;
+    }
+    
+    private double computeBaseline3Perplexity(Map<String, TestTermParams> testCorpusMap){
+    	double perplexity = 0.0;
+    	double logSumProb = 0.0;
+    	double l_perplexity = 0.0;
+    	int totFreq = calculateTotTestCorpusTerms(testCorpusMap);
+		for (Object term : testCorpusMap.keySet()) {
+			TestTermParams ttp = testCorpusMap.get(term);
+			logSumProb += Math.log(ttp.prob);
+		}
+		l_perplexity = logSumProb / totFreq;
+		perplexity = Math.pow(2, -l_perplexity);
+    	return perplexity;
+    }
+    
+	private int calculateTotFreq(Map<String, Integer> areaCorpusMap) {
+		int totalFreq = 0;
+
+		for (Object term : areaCorpusMap.keySet()) {
+			totalFreq += (int) areaCorpusMap.get(term);
+		}
+		return totalFreq;
+	}
+	
+	private int calculateTotTestCorpusTerms(Map<String, TestTermParams> testCorpusMap) {
+		int totalFreq = 0;
+
+		for (Object term : testCorpusMap.keySet()) {
+			TestTermParams ttp = testCorpusMap.get(term);
+			totalFreq += ttp.freq;
+		}
+		return totalFreq;
+	}
+//	Common computeBaselineMap	
+	public void computeBaselineMap(IndexReader iAreaReader, int docID, double firstProb, Map<String, TestTermParams> testCorpusMapBaseline) throws IOException, InterruptedException{
+		areaCorpusMap = getAreaTerms(iAreaReader, docID);
+		int totFreq = calculateTotFreq(areaCorpusMap);
+//		getTestCorpusTerms(yearTPlus);
+		TestTermParams ttp;
+		int count = 0;
+		for (Object term : testCorpusMapBaseline.keySet()) {
+			ttp = testCorpusMapBaseline.get(term);
+			int word_freq = ttp.freq;
+			double thirdProb = ttp.prob;
+			int area_term_freq = 0;
+			if (areaCorpusMap.containsKey(term)) {
+				area_term_freq = areaCorpusMap.get(term);
+			}
+			if (area_term_freq != 0) {
+				thirdProb = alpha * area_term_freq / totFreq;
+			} else {
+				thirdProb = (1 - alpha) * 1 / totFreq;
+			}
+			thirdProb = Math.pow(thirdProb, word_freq);
+			double cummProb = firstProb * thirdProb;
+			if (cummProb == 0.0){
+				cummProb = 0.0000001;
+			}
+			ttp.prob += cummProb;
+			
+			testCorpusMapBaseline.put((String)term, ttp);
+			System.out.println("......computeBaseline1Map:"+testCorpusMapBaseline1.get(term).prob);
+		}
+	}
+	public double getBaseline2Prob(String areaStrT, String yearT) throws IOException, InterruptedException{
+		double prob = 0.00000000001; // Initialize to a very small probability
+		long Nate = 0;
+		long totNate = 0;
+		if (resYearAreasCnt.containsKey(researcherId)){
+			JSONObject YearAreaCnt = (JSONObject)resYearAreasCnt.get(researcherId);
+//			System.out.println(YearAreaCnt);
+//			System.out.println("***************************");
+			java.util.Iterator it1 = YearAreaCnt.keySet().iterator();
+			while(it1.hasNext()){
+				String s1 = (String)it1.next();
+//				System.out.println("key = "+ s1+':'+ YearAreaCnt.get(s1));
+				JSONObject inner = (JSONObject)YearAreaCnt.get(s1);
+				java.util.Iterator it2 = inner.keySet().iterator();
+				while(it2.hasNext()) {
+					String s2 = (String)it2.next();
+					if (s1.equalsIgnoreCase(yearT) && s2.equalsIgnoreCase(areaStrT)){
+						Nate = (long)inner.get(s2);
+					}
+//					System.out.println("key = " +s2+':'+ inner.get(s2));
+					totNate += (long)inner.get(s2);
+				}
+			}
+		}
+//		System.out.println(totNate);
+//		System.out.println(Nate);
+		if (totNate != 0 && Nate != 0){
+			prob = (double)Nate / totNate;
+		}
+		return prob;
+	}
+
+	public double getBaseline3Prob(String areaStrT, String yearT) throws IOException, InterruptedException{
+		double prob = 0.00000000001; // Initialize to a very small probability
+		long Nate = 0;
+		long totNate = 0;
+//		System.out.println("getBaseline3Prob");
+		java.util.Iterator it1 = yearAreasCnt.keySet().iterator();
+		while(it1.hasNext()){
+			String s1 = (String)it1.next();
+//			System.out.println("key = "+ s1+':'+ yearAreasCnt.get(s1));
+			JSONObject inner = (JSONObject)yearAreasCnt.get(s1);
+			java.util.Iterator it2 = inner.keySet().iterator();
+			while(it2.hasNext()) {
+				String s2 = (String)it2.next();
+				if (s1.equalsIgnoreCase(yearT) && s2.equalsIgnoreCase(areaStrT)){
+					Nate = (long)inner.get(s2);
+				}
+//				System.out.println("key = " +s2+':'+ inner.get(s2));
+				totNate += (long)inner.get(s2);
+			}
+		}
+//		System.out.println(totNate);
+//		System.out.println(Nate);
+		if (totNate != 0 && Nate != 0){
+			prob = (double)Nate / totNate;
+		}
+		return prob;
+	}
+	
+	public DynResInt_unclean() {
+		analyzer = new EnglishAnalyzer(Version.LUCENE_43);
+		alpha = 0.85;
+		yearT = "2010";
+		yearTPlus = "2012";
+		resYearCorpusBuffRead = openResearcherYearCorpus();
+		resYearAreaCorpusBuffRead = openResearcherYearAreaCorpus();
+		jsonParser = new JSONParser();
+		researcherPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsResearcherCorpusIndex");
+		areaTPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTAreaIndex");
+		areaTPlusPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTPlusAreaIndex");
+		testPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+	}
+	
+	public static void main(String argv[]) throws InterruptedException, IOException, ParseException {
+		DynResInt_unclean mainClass = new DynResInt_unclean();
+		
+		String resYearCorpus = null;
+		String resYearAreaCorpus = null;
+		BufferedWriter bw1 = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/perplexities"));
+		bw1.write("Name(ID)\tModel Perplexity\tBaseline1 Perplexity\tBaseline2 Perplexity\tBaseline3 Perplexity\tCummulative Perplexity\n");
+//		BufferedWriter model_prob_bw = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/model_probs"));
+//		BufferedWriter baseline_prob_bw = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/baseline_probs"));
+		BufferedWriter test_temp = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/test_temp"));
+		BufferedWriter num_areas = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/num_areas"));
+		if (mainClass.resYearCorpusBuffRead == null){
+			System.out.print("Could not open the file");
+			System.exit(1);
+		}
+		mainClass.getYearAreasCntDic();
+		mainClass.getResYearAreasCntDic();
+//		System.exit(1);
+		try{
+			int resCnt = 1;
+			while (((resYearCorpus = mainClass.resYearCorpusBuffRead.readLine()) != null) && ((resYearAreaCorpus = mainClass.resYearAreaCorpusBuffRead.readLine()) != null)){
+		        IndexReader iResreader;
+		        //Extract the necessary fields from the researcher and researcher_area corpus
+		        mainClass.extractFields(resYearCorpus, resYearAreaCorpus);
+		        System.out.println("Starting process for researcher:" + mainClass.researcherName);
+				//Proceed only if the researcher has corpus for both the years T and TPlus
+				if (mainClass.researcherYearAreaCorpusMap.containsKey(mainClass.yearT) && mainClass.researcherYearAreaCorpusMap.containsKey(mainClass.yearTPlus)){
+					if (mainClass.researcherId.equals("LfF2zfQAAAAJ") || mainClass.researcherId.equals("MlZq4XwAAAAJ")){
+						test_temp.write("*************"+mainClass.researcherName+"*************"+"\n");
+					}
+//					System.out.println("YearT = "+mainClass.yearT+":"+mainClass.yearCorpusMap.get(mainClass.yearT));
+					mainClass.researcherCorpus = (String)mainClass.yearCorpusMap.get(mainClass.yearT);
+//					Commented out Indexing the test corpus
+					mainClass.indexTestCorpusYears(mainClass.yearTPlus);
+//					mainClass.indexTestCorpusYears("1977");
+					mainClass.readIndex(mainClass.testPath, "yearId", "yearCorpus");
+//					System.exit(1);
+					mainClass.indexResearcherCorpus(mainClass.researcherId, mainClass.researcherCorpus);
+					HashMap yearAreasT = (HashMap)mainClass.researcherYearAreaCorpusMap.get(mainClass.yearT);
+					String areaStrT;
+					String areaCorpusT;
+					mainClass.getTestCorpusTerms(mainClass.yearTPlus);
+					HashMap yearAreasTPlus = (HashMap)mainClass.researcherYearAreaCorpusMap.get(mainClass.yearTPlus);
+					String areaStrTPlus;
+					String areaCorpusTPlus;
+					DirectoryReader iAreaTReader;
+					DirectoryReader iAreaTPlusReader;
+					
+					num_areas.write(mainClass.researcherName+ " "+mainClass.yearT +" "+yearAreasT.size()+" "+mainClass.yearTPlus +" "+yearAreasTPlus.size()+"\n");
+//					System.out.println("#areas in year:"+mainClass.yearTPlus+"="+yearAreasTPlus.size());
+					
+					for(Object areaTPlus: yearAreasTPlus.keySet()){
+						areaStrTPlus = areaTPlus.toString();
+						areaCorpusTPlus = (String)yearAreasTPlus.get(areaStrTPlus);
+						mainClass.indexAreaTPlusCorpus(mainClass.researcherId, mainClass.researcherName, mainClass.yearTPlus, areaStrTPlus, areaCorpusTPlus);
+					}
+					double normFirstProb = 0.0;
+					for(Object areaT: yearAreasT.keySet()){
+						areaStrT = areaT.toString();
+						areaCorpusT = (String)yearAreasT.get(areaStrT);
+						mainClass.indexAreaTCorpus(mainClass.researcherId, mainClass.researcherName, mainClass.yearT, areaStrT, areaCorpusT);
+						iAreaTReader = mainClass.getReaderHandler(mainClass.areaTPath);
+//						System.out.println("Total#docs = "+iAreaTReader.maxDoc());
+						int docIDT = iAreaTReader.maxDoc() - 1;
+						Document hitDocT = iAreaTReader.document(docIDT);
+						iResreader = mainClass.getReaderHandler(mainClass.researcherPath);
+						int resDocID = iResreader.maxDoc() - 1;
+						Document resDoc = iResreader.document(resDocID);
+						double firstProb = mainClass.cosineDocumentSimilarity(resDocID, docIDT, iResreader, iAreaTReader, "researcherCorpus", "areaCorpus");
+//						System.out.println("Comparing resDocID:"+resDocID+"&"+docIDT+" "+areaStrT);
+						normFirstProb += firstProb;
+//						System.out.println(firstProb);
+						mainClass.deleteIndexes("areasT");
+//						mainClass.deleteDoc(iAreaReader.maxDoc() - 1);
+//						mainClass.directory = FSDirectory.open(mainClass.areaPath);
+//						mainClass.config = new IndexWriterConfig(Version.LUCENE_43, mainClass.analyzer);
+//				    	Directory directory = FSDirectory.open(mainClass.areaPath);
+//				    	DirectoryReader ireader = DirectoryReader.open(directory);
+//				    	mainClass.iwriter = new IndexWriter(directory, mainClass.config);
+////				    	mainClass.iwriter.tryDeleteDocument(ireader, docIDT);
+//				    	mainClass.iwriter.commit();
+//				    	mainClass.iwriter.close();
+					}
+					for(Object areaT: yearAreasT.keySet()){
+						areaStrT = areaT.toString();
+						areaCorpusT = (String)yearAreasT.get(areaStrT);
+						mainClass.indexAreaTCorpus(mainClass.researcherId, mainClass.researcherName, mainClass.yearT, areaStrT, areaCorpusT);
+						iAreaTReader = mainClass.getReaderHandler(mainClass.areaTPath);
+//						System.out.println("Total#docs = "+iAreaTReader.maxDoc()+" "+areaStrT);
+						int docIDT = iAreaTReader.maxDoc() - 1;
+						Document hitDocT = iAreaTReader.document(docIDT);
+						iResreader = mainClass.getReaderHandler(mainClass.researcherPath);
+						int resDocID = iResreader.maxDoc() - 1;
+						
+						double firstProb = mainClass.cosineDocumentSimilarity(resDocID, docIDT, iResreader, iAreaTReader, "researcherCorpus", "areaCorpus");
+						firstProb = firstProb / normFirstProb;
+//						System.out.println("firstProb" + firstProb);
+						double baseline2prob = mainClass.getBaseline2Prob(areaStrT, mainClass.yearT);
+						double baseline3prob = mainClass.getBaseline3Prob(areaStrT, mainClass.yearT);
+//						System.out.println("baseline1prob" + firstProb);
+//						System.out.println("baseline2prob" + baseline2prob);
+//						System.out.println("baseline3prob" + baseline3prob);
+						if (mainClass.researcherId.equals("LfF2zfQAAAAJ") || mainClass.researcherId.equals("MlZq4XwAAAAJ")){
+							test_temp.write(hitDocT.get("year")+" "+hitDocT.get("areaName")+":firstProb="+firstProb+"\n");
+						}
+//						model_prob_bw.write(hitDocT.get("year")+" "+hitDocT.get("areaName")+" "+firstProb+"\n");
+//						baseline_prob_bw.write(hitDocT.get("year")+" "+hitDocT.get("areaName")+" "+firstProb+"\n");
+						mainClass.computeBaselineMap(iAreaTReader, docIDT, firstProb, mainClass.testCorpusMapBaseline1);
+						mainClass.computeBaselineMap(iAreaTReader, docIDT, baseline2prob, mainClass.testCorpusMapBaseline2);
+						mainClass.computeBaselineMap(iAreaTReader, docIDT, baseline3prob, mainClass.testCorpusMapBaseline3);
+//						mainClass.computeBaseline1Map(iAreaReader, docIDT, firstProb);
+//						System.out.println("*********************");
+//						mainClass.computeBaseline2Map(iAreaReader, docIDT, baseline2prob);
+//						System.out.println("*********************");
+//						mainClass.computeBaseline3Map(iAreaReader, docIDT, baseline3prob);
+//						for (Object term : mainClass.testCorpusMapBaseline1.keySet()) {
+//							System.out.println(term + ":"+mainClass.testCorpusMapBaseline1.get(term).prob);
+//							System.out.println(term + ":"+mainClass.testCorpusMapBaseline2.get(term).prob);
+//							System.out.println(term + ":"+mainClass.testCorpusMapBaseline3.get(term).prob);
+//						}
+//						System.exit(1);
+//						System.out.println("Comparing " + hitDocT.get("year") + " area:" + hitDocT.get("areaName"));
+						double normSecondProb = 0.0;
+						iAreaTPlusReader = mainClass.getReaderHandler(mainClass.areaTPlusPath);
+						for (int j = 0; j < iAreaTPlusReader.maxDoc(); j++) {
+							int docIDTPlus = j;
+							Document hitDocTPlus = iAreaTPlusReader.document(docIDTPlus);
+							double secondProb = mainClass.cosineDocumentSimilarity(docIDT, docIDTPlus, iAreaTReader,iAreaTPlusReader, "areaCorpus", "areaCorpus");
+//							System.out.println("Comparing "+ docIDT+ " & "+docIDTPlus);
+//							double firstProb = mainClass.cosineDocumentSimilarity(resDocID, docIDT, iResreader, iAreaTReader, "researcherCorpus", "areaCorpus");
+							normSecondProb += secondProb;
+							System.out.println("Second prob = "+secondProb+" normSecondProb = "+ normSecondProb);
+						}
+						for (int j = 0; j < iAreaTPlusReader.maxDoc()-1; j++) {
+							int docIDTPlus = j;
+							Document hitDocTPlus = iAreaTPlusReader.document(docIDTPlus);
+							double secondProb = mainClass.cosineDocumentSimilarity(docIDT, docIDTPlus, iAreaTReader,iAreaTPlusReader, "areaCorpus", "areaCorpus");
+							secondProb = secondProb / normSecondProb;
+							System.out.println("secondProb = " + secondProb);
+							if (mainClass.researcherId.equals("LfF2zfQAAAAJ") || mainClass.researcherId.equals("MlZq4XwAAAAJ")){
+								test_temp.write(hitDocTPlus.get("year")+" "+hitDocTPlus.get("areaName")+":secondProb="+secondProb+"\n");
+							}
+							mainClass.areaCorpusMap = mainClass.getAreaTerms(iAreaTPlusReader, docIDTPlus);
+							int totFreq = mainClass.calculateTotFreq(mainClass.areaCorpusMap);
+							TestTermParams ttp;
+							for (Object term : mainClass.testCorpusMap.keySet()) {
+								ttp = mainClass.testCorpusMap.get(term);
+								int word_freq = ttp.freq;
+								double thirdProb = 0.0;
+								int area_term_freq = 0;
+								if (mainClass.areaCorpusMap.containsKey(term)) {
+									area_term_freq = mainClass.areaCorpusMap.get(term);
+								}
+								if (area_term_freq != 0) {
+									thirdProb = mainClass.alpha * area_term_freq / totFreq;
+									if (thirdProb > 1.0){
+										System.out.println("Here?");
+										System.out.println("mainClass.alpha * area_term_freq = " + mainClass.alpha * area_term_freq);
+										System.out.println("mainClass.alpha * area_term_freq / totFreq = " + mainClass.alpha * area_term_freq / totFreq);
+									}
+								} else {
+									if (thirdProb > 1.0){
+										System.out.println("Or Here?");
+										System.out.println("mainClass.alpha * area_term_freq = " + mainClass.alpha * area_term_freq);
+										System.out.println("mainClass.alpha * area_term_freq / totFreq = " + mainClass.alpha * area_term_freq / totFreq);
+									}
+									thirdProb = (1 - mainClass.alpha) * 1 / totFreq;
+								}
+								if (thirdProb == 0.0){
+									System.out.println("ThirdProb == 0.0");
+								}
+								double preThirdProb = thirdProb;
+								thirdProb = Math.pow(thirdProb, word_freq);
+								if (thirdProb == 0.0){
+									System.out.println("preThirdProb = " + preThirdProb + " word " + term+ " freq = "+ word_freq);
+								}
+								double cummProb = firstProb * secondProb * thirdProb;
+//								if (cummProb == 0.0){
+//									System.out.println("cummProb == 0.011111111111111111111");
+//									System.out.println(firstProb +" "+ secondProb +" "+ thirdProb);
+//								}
+//								if (thirdProb > 1.0 || cummProb > 1.0){
+//									System.out.println("alpha  = "+ mainClass.alpha + " areaTernFreq = "+area_term_freq+" totFreq = "+totFreq);
+//									System.out.println(firstProb+"\t"+secondProb+"\t"+thirdProb+"\t"+cummProb);
+//								}
+								if (cummProb == 0.0){
+									cummProb = 0.0000001;
+								}
+								ttp.prob += cummProb;
+								mainClass.testCorpusMap.put((String)term, ttp);
+							}
+							if (mainClass.researcherId.equals("LfF2zfQAAAAJ") || mainClass.researcherId.equals("MlZq4XwAAAAJ")){
+							for (Object term : mainClass.testCorpusMap.keySet()) {
+								test_temp.write(term+":"+mainClass.testCorpusMap.get(term).prob+"\t");
+								num_areas.write(term+":"+mainClass.testCorpusMap.get(term).prob+"\t");
+							}
+							test_temp.write("\n");
+							num_areas.write("\n");
+							}
+						}
+						mainClass.deleteIndexes("areasT");
+//						double perplexity = mainClass.computeNewPerplexity(mainClass.testCorpusMap);
+//						double baseline1perplexity = mainClass.computeNewPerplexity(mainClass.testCorpusMapBaseline);
+//						double baseline2perplexity = mainClass.computeNewBaseline2Perplexity(mainClass.testCorpusMapBaseline);
+//						double baseline3perplexity = mainClass.computeNewBaseline3Perplexity(mainClass.testCorpusMapBaseline);
+//						System.out.println("ModelPerplexity = " + perplexity);
+//						System.out.println("Baseline1Perplexity = " + baseline1perplexity);
+//						System.out.println("Baseline2Perplexity = " + baseline2perplexity);
+//						System.out.println("Baseline3Perplexity = " + baseline3perplexity);
+					}
+					for (Object term : mainClass.testCorpusMap.keySet()) {
+						System.out.println(term + ":"+mainClass.testCorpusMap.get(term).prob);
+						System.out.println(term + ":"+mainClass.testCorpusMapBaseline1.get(term).prob);
+						System.out.println(term + ":"+mainClass.testCorpusMapBaseline2.get(term).prob);
+						System.out.println(term + ":"+mainClass.testCorpusMapBaseline3.get(term).prob);
+					}
+					
+					double perplexity = mainClass.computePerplexity(mainClass.testCorpusMap);
+					double baseline1perplexity = mainClass.computePerplexity(mainClass.testCorpusMapBaseline1);
+					double baseline2perplexity = mainClass.computePerplexity(mainClass.testCorpusMapBaseline2);
+					double baseline3perplexity = mainClass.computePerplexity(mainClass.testCorpusMapBaseline3);
+//					for (Object term : mainClass.testCorpusMap.keySet()) {
+//						System.out.println(term + ":"+mainClass.testCorpusMap.get(term).prob);
+//						System.out.println(term + ":"+mainClass.testCorpusMapBaseline1.get(term).prob);
+//						System.out.println(term + ":"+mainClass.testCorpusMapBaseline2.get(term).prob);
+//						System.out.println(term + ":"+mainClass.testCorpusMapBaseline3.get(term).prob);
+//						if (count > 5)
+//							break;
+//					}
+//					Thread.sleep(1000);
+					System.out.println("ModelPerplexity = " + perplexity);
+					System.out.println("Baseline1Perplexity = " + baseline1perplexity);
+					System.out.println("Baseline2Perplexity = " + baseline2perplexity);
+					System.out.println("Baseline3Perplexity = " + baseline3perplexity);
+//					model_prob_bw.write("*************"+mainClass.researcherName+"*************"+"\n");
+//					baseline_prob_bw.write("*************"+mainClass.researcherName+"*************"+"\n");
+//					if (mainClass.researcherId.equals("LfF2zfQAAAAJ") || mainClass.researcherId.equals("MlZq4XwAAAAJ")){
+//						test_temp.write("*************"+mainClass.researcherName+"*************"+"\n");
+//					}
+					double cummPerplexity = (0.5 * perplexity) +(0.3 * baseline1perplexity) + (0.1 * baseline2perplexity) + (0.1 * baseline3perplexity);
+					System.out.println("cummPerplexity = " + cummPerplexity);
+					bw1.write(mainClass.researcherName+"("+mainClass.researcherId+")"+ "\t"+ perplexity +"\t"+baseline1perplexity+"\t"+baseline2perplexity+"\t"+baseline3perplexity+"\t"+cummPerplexity+"\n");
+		    	}
+				mainClass.deleteIndexes("areasT");
+				mainClass.deleteIndexes("areasTPlus");
+				mainClass.deleteIndexes("test");
+				mainClass.deleteIndexes("researcher");
+				resCnt++;
+				System.out.println("Completed process for researcher:"+mainClass.researcherName);
+			}
+			bw1.close();
+			num_areas.close();
+//			model_prob_bw.close();
+//			baseline_prob_bw.close();
+			test_temp.close();
+		}catch(IOException e){
+			e.printStackTrace();
+		}catch (ParseException e) {
+			e.printStackTrace();
+		}
+	}
+}
