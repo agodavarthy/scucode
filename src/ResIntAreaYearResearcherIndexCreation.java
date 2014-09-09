@@ -288,7 +288,7 @@ public class ResIntAreaYearResearcherIndexCreation {
     }
 
     public static void readALLAreasIndex() throws IOException{
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsALLAreasIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoALLAreasIndex");
     	Directory directory = FSDirectory.open(path);
 		DirectoryReader ireader = DirectoryReader.open(directory);
 		IndexSearcher isearcher = new IndexSearcher(ireader);
@@ -296,8 +296,8 @@ public class ResIntAreaYearResearcherIndexCreation {
 //		System.exit(1);
 		for (int i = 0; i < ireader.maxDoc(); i++){
 			Set<String> terms = new HashSet<>();
-			Map<String, Integer> frequencies = new HashMap<>();
-			Terms vector = ireader.getTermVector(i, "areaName");
+//			Map<String, Integer> frequencies = new HashMap<>();
+//			Terms vector = ireader.getTermVector(i, "areaName");
 			Document d = ireader.document(i);
 			System.out.println(d.getValues("areaName")[0]);
     	    }

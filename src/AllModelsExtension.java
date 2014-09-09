@@ -91,7 +91,7 @@ public class AllModelsExtension {
 	private BufferedReader openResearcherYearCorpus() {
 		BufferedReader br = null;
 		try {
-			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_corpus_arnet_IR.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_corpus_arnet_bioinfo.json"));
 			return br;
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -102,7 +102,7 @@ public class AllModelsExtension {
 	private BufferedReader openResearcherYearAreaCorpus() {
 		BufferedReader br = null;
 		try {
-			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_areas_arnet_IR.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/researcher_year_areas_arnet_bioinfo.json"));
 			return br;
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -114,7 +114,7 @@ public class AllModelsExtension {
 	private BufferedReader openTestCorpus() {
 		BufferedReader br = null;
 		try {
-			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/test_year_corpus_arnet_IR.json"));
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/test_year_corpus_arnet_bioinfo.json"));
 			return br;
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -208,7 +208,7 @@ public class AllModelsExtension {
 		JSONParser jsonParser = new JSONParser();
 		BufferedReader testCorpusBuffRead = openTestCorpus();
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoTestCorpusIndex");
     	Directory directory = FSDirectory.open(path);
         IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
         IndexWriter iwriter;
@@ -236,7 +236,7 @@ public class AllModelsExtension {
 	
 	private void indexResearcherCorpus(String researcherId, String researcherCorpus) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsResearcherCorpusIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoResearcherCorpusIndex");
     	Directory directory = FSDirectory.open(path);
         IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
         IndexWriter iwriter;
@@ -251,7 +251,7 @@ public class AllModelsExtension {
 	
 	private void indexResearcherCorpusForVocab(String researcherCorpus) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsResearcherCorpusVocabIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoResearcherCorpusVocabIndex");
     	Directory directory = FSDirectory.open(path);
         IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
         IndexWriter iwriter;
@@ -265,7 +265,7 @@ public class AllModelsExtension {
 	}
 	private void indexAreaTCorpus(String researcherId, String researcherName, String yearT, String areaStrT, String areaCorpusT) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTAreaIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoYearTAreaIndex");
     	directory = FSDirectory.open(path);
     	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
 		iwriter = new IndexWriter(directory, config);
@@ -282,7 +282,7 @@ public class AllModelsExtension {
 
 	private void indexAreaTPlusCorpus(String researcherId, String researcherName, String yearTPlus, String areaStrTPlus, String areaCorpusTPlus) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTPlusAreaIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoYearTPlusAreaIndex");
     	directory = FSDirectory.open(path);
     	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
         
@@ -300,7 +300,7 @@ public class AllModelsExtension {
 
 	private void indexALLAreasCorpus(String areaName, String areaCorpus) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsALLAreasIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoALLAreasIndex");
     	directory = FSDirectory.open(path);
     	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
 		iwriter = new IndexWriter(directory, config);
@@ -428,7 +428,7 @@ public class AllModelsExtension {
     }
 
 	private void getTestCorpusTerms(String year) throws IOException {
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoTestCorpusIndex");
     	Directory directory = FSDirectory.open(path);
     	DirectoryReader ireader = DirectoryReader.open(directory);
     	IndexSearcher isearcher = new IndexSearcher(ireader);
@@ -588,6 +588,9 @@ public class AllModelsExtension {
 		double prob = 0.0;
 		long Nat = 0;
 		long totNat = 0;
+//		System.out.println(yearT);
+//		System.out.println(yearAreasCnt);
+//		System.exit(1);
 		HashMap yearAreas = (HashMap)yearAreasCnt.get(yearT);
 		if (yearAreas.containsKey(areaStrT)){
 			Nat = (long)yearAreas.get(areaStrT);
@@ -707,21 +710,21 @@ public class AllModelsExtension {
 		analyzer = new EnglishAnalyzer(Version.LUCENE_43);
 		alpha = 0.85;
 		gamma = 0.5;
-		yearT = "2012";
-		yearTPlus = "2013";
+		yearT = "2001";
+		yearTPlus = "2003";
 		resYearCorpusBuffRead = openResearcherYearCorpus();
 		resYearAreaCorpusBuffRead = openResearcherYearAreaCorpus();
 		jsonParser = new JSONParser();
-		researcherPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsResearcherCorpusIndex");
-		areaTPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTAreaIndex");
-		areaALLPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsALLAreasIndex");
-		areaTPlusPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsYearTPlusAreaIndex");
-		testPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsTestCorpusIndex");
+		researcherPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoResearcherCorpusIndex");
+		areaTPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoYearTAreaIndex");
+		areaALLPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoALLAreasIndex");
+		areaTPlusPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoYearTPlusAreaIndex");
+		testPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoTestCorpusIndex");
 	}
 	
 	public static void main(String argv[]) throws InterruptedException, IOException, ParseException {
 		AllModelsExtension mainClass = new AllModelsExtension();
-		
+		System.out.println("Trying GitHub");
 		String resYearCorpus = null;
 		String resYearAreaCorpus = null;
 		
@@ -736,8 +739,9 @@ public class AllModelsExtension {
 		try{
 			//Vocab count
 //			mainClass.indexResearcherCorpusForVocab(String researcherCorpus);
-			mainClass.vocabCnt = 3840;
+			mainClass.vocabCnt = 3755;
 			System.out.println(mainClass.yearTPlus);
+			mainClass.deleteIndexes("test");
 			mainClass.indexTestCorpusYears(mainClass.yearTPlus);
 			mainClass.readIndex(mainClass.testPath, "yearId", "yearCorpus");
 			DirectoryReader iTestReader = mainClass.getReaderHandler(mainClass.testPath);

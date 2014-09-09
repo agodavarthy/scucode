@@ -1,8 +1,15 @@
 package OldCode;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
@@ -13,8 +20,12 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -36,7 +47,7 @@ public class PredictAreaTPlusIndexALLAreas {
     }
 	private static void indexALLAreasCorpus(String areaName, String areaCorpus) throws IOException{
 		Analyzer analyzer = new EnglishAnalyzer(Version.LUCENE_43);
-    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsALLAreasIndex");
+    	File path = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsBioinfoALLAreasIndex");
     	directory = FSDirectory.open(path);
     	config = new IndexWriterConfig(Version.LUCENE_43, analyzer);
         
@@ -53,13 +64,41 @@ public class PredictAreaTPlusIndexALLAreas {
     	DirectoryReader ireader = DirectoryReader.open(directory);
     	return ireader;
 	}
-	public static void main(String args[]) throws IOException, ParseException{
+		
+	static int calculateVocabCnt(String index) throws IOException{
+		int vocabCnt = 0;
+		
+		BufferedWriter vocab = new BufferedWriter(new FileWriter("/home/archana/SCU_projects/research_changes/lucene/vocab"));
+		ArrayList uniqVocab = new ArrayList<>();
+		File temppath = new File("/home/archana/SCU_projects/research_changes/lucene/"+index);
+		Directory directory = FSDirectory.open(temppath);
+		DirectoryReader iVocabTReader = DirectoryReader.open(directory);
+		Set vocabulary = new HashSet<>();
+		for (int j = 0; j < iVocabTReader.maxDoc(); j++) {
+			Terms area_terms = iVocabTReader.getTermVector(j, "areaCorpus");
+			TermsEnum termsEnum = null;
+			termsEnum = area_terms.iterator(termsEnum);
+			BytesRef name = null;
+			while ((name = termsEnum.next()) != null) {
+				String term = name.utf8ToString();
+				vocab.write("\""+term+"\",");
+				vocabulary.add(term);
+				int freq = (int) termsEnum.totalTermFreq();
+				vocabCnt += 1;
+			}
+		}
+		vocab.write("\n");
+		System.out.println("Vocab size = " + vocabulary.size());
+		return vocabCnt;
+	}
+	
+	static void createALLAreaCorpus(String inputFile, String index) throws IOException, ParseException{
 		BufferedReader allAreaCorpusBuffRead;
 		BufferedReader br = null;
 		String keywordCorpus = null;
-		File areaALLPath = new File("/home/archana/SCU_projects/research_changes/lucene/ResIntKeywordsALLAreasIndex");
+		File areaALLPath = new File("/home/archana/SCU_projects/research_changes/lucene/"+index);
 		JSONParser jsonParser;jsonParser = new JSONParser();
-		allAreaCorpusBuffRead = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/keyword_corpus_arnet_IR.json"));
+		allAreaCorpusBuffRead = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/"+inputFile));
 		while ((keywordCorpus = allAreaCorpusBuffRead.readLine()) != null){
 			Object keyCorpObj = jsonParser.parse(keywordCorpus);
 			JSONObject keyCorpJSONObj = (JSONObject)keyCorpObj;
@@ -72,5 +111,12 @@ public class PredictAreaTPlusIndexALLAreas {
 			System.out.println(iALLAreasReader.maxDoc());
 		}
 		allAreaCorpusBuffRead.close();
+		
+	}
+	public static void main(String args[]) throws IOException, ParseException{
+		String inputFile = "keyword_corpus_arnet_IR.json";
+		String index = "ResIntKeywordsALLAreasIndex";
+//		createALLAreaCorpus(inputFile, index);
+		calculateVocabCnt(index);
 	}
 }
