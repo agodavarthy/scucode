@@ -67,6 +67,8 @@ public class AllModelsExtension {
 	private JSONParser jsonParser;
 	private HashMap researcherYearAreaCorpusMap;
 	private HashMap resYearAreasCnt;
+	private HashMap resAffilYearDic;
+	private HashMap affilYearAreaDic;
 	private HashMap yearAreasCnt;
 	private String researcherId;
 	private String researcherName;
@@ -376,6 +378,53 @@ public class AllModelsExtension {
 			}
 		}
 	}
+	
+	private void getResAffilYearDic() throws IOException, ParseException{
+		resAffilYearDic = new HashMap();
+		BufferedReader br = null;
+		try {
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/bioinfo_res_affil.json"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (br != null){
+			String res_affil_year_dic;
+			while ((res_affil_year_dic = br.readLine()) != null){
+				Object resAffilYearDicObj = jsonParser.parse(res_affil_year_dic);
+				JSONObject resYearAreaCntJSONObj = (JSONObject)resAffilYearDicObj;
+				String researcherID  = (String)resYearAreaCntJSONObj.get("researcher_id");
+				String researcherName  = (String)resYearAreaCntJSONObj.get("researcher_name");
+				HashMap resAffilYearMap = (HashMap)resYearAreaCntJSONObj.get("affiliation_year");
+				if (resAffilYearMap != null){
+					resAffilYearDic.put(researcherID, resAffilYearMap);
+				}
+			}
+		}
+	}
+
+	private void getAffilYearAreaDic() throws IOException, ParseException{
+		affilYearAreaDic = new HashMap();
+		BufferedReader br = null;
+		try {
+			br = new BufferedReader(new FileReader("/home/archana/SCU_projects/research_changes/lucene/bioinfo_affil_profile.json"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (br != null){
+			String res_affil_year_dic;
+			while ((res_affil_year_dic = br.readLine()) != null){
+				Object resAffilYearDicObj = jsonParser.parse(res_affil_year_dic);
+				JSONObject resYearAreaCntJSONObj = (JSONObject)resAffilYearDicObj;
+				String researcherID  = (String)resYearAreaCntJSONObj.get("researcher_id");
+				String researcherName  = (String)resYearAreaCntJSONObj.get("researcher_name");
+				HashMap resAffilYearMap = (HashMap)resYearAreaCntJSONObj.get("affiliation_year");
+				if (resAffilYearMap != null){
+					resAffilYearDic.put(researcherID, resAffilYearMap);
+				}
+			}
+		}
+	}
+
 	
 	public DirectoryReader getReaderHandler(File path) throws IOException{
     	Directory directory = FSDirectory.open(path);
@@ -724,7 +773,6 @@ public class AllModelsExtension {
 	
 	public static void main(String argv[]) throws InterruptedException, IOException, ParseException {
 		AllModelsExtension mainClass = new AllModelsExtension();
-		System.out.println("Trying GitHub");
 		String resYearCorpus = null;
 		String resYearAreaCorpus = null;
 		
@@ -732,10 +780,11 @@ public class AllModelsExtension {
 			System.out.print("Could not open the file");
 			System.exit(1);
 		}
-		mainClass.getYearAreasCntDic();
-		mainClass.getResYearAreasCntDic();
-		System.out.println("Done with YearAreasCntDic");
-		
+//		mainClass.getYearAreasCntDic();
+//		mainClass.getResYearAreasCntDic();
+		mainClass.getResAffilYearDic();
+		System.out.println(mainClass.resAffilYearDic);
+		System.exit(1);
 		try{
 			//Vocab count
 //			mainClass.indexResearcherCorpusForVocab(String researcherCorpus);
